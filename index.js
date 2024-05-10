@@ -10,6 +10,9 @@ const client = new Client({
   ]
 });
 
+// Import moment-timezone to convert date to Eastern Standard Time
+const moment = require('moment-timezone');
+
 // All birthdays stored in "userID: MM-DD" format
 const birthdays = {
     '181274954719952898': '01-05', // gnomecomingatchya (Chris)
@@ -24,29 +27,39 @@ const birthdays = {
     '134144734707974145': '07-05', // zakarii7 (Zack)
     '242099941483347968': '07-22', // mizukimillion (Mizu)
     '250047611938144256': '07-27', // snippins (Gerald)
+    '183341905965219840': '09-24', // javaaaaaaa (Dakotah)
     '300453354214260737': '11-14', // unrivaled_bacon (Roland)
     '123855427048964098': '12-29'  // pounce1 (Janak)
 };
 
-// Name of the birthday role to be assigned to users
+// Name of the birthday role to be assigned to users and the channel to make announcements in
 const BIRTHDAY_ROLE_NAME = 'Almighty Birthday Lord';
+const ANNOUNCEMENTS_CHANNEL_NAME = '💬-words-are-fun';
 
-// Run "checkBirthdays" every minute once ready
+// Run "checkBirthdays" every 12:01 AM once ready
 client.once('ready', () => {
     console.log('Ready!');
-    setInterval(checkBirthdays, 60 * 1000);
+
+    setInterval(checkBirthdays, 60 * 1000); // Check birthdays every minute
+
+    // Schedule bot to run daily at 00:01 in the GMT-4 timezone
+    // const job = schedule.scheduleJob({hour: 4, minute: 1}, function() { // GMT-4 at 00:01 is 04:01 UTC
+    //     checkBirthdays();
+    // });
+
 });
 
 // Check for birthdays and assign the birthday roles
 async function checkBirthdays() {
     // Get today's date and format into MM-DD format
-    const today = new Date();
-    const todayStr = (today.getMonth() + 1).toString().padStart(2, '0') + '-' + today.getDate().toString().padStart(2, '0');
+    const today = moment().tz("America/New_York");
+    const todayStr = today.format('MM-DD');
 
     // Run for each server the bot is in
     client.guilds.cache.forEach(async (guild) => {
-        // Get the Birthday role
+        // Get the birthday role and announcements channel
         const birthdayRole = guild.roles.cache.find(role => role.name === BIRTHDAY_ROLE_NAME);
+        const announcementsChannel = guild.channels.cache.find(channel => channel.name === ANNOUNCEMENTS_CHANNEL_NAME);
 
         // Return error message if the birthday role does not exist
         if (!birthdayRole) {
@@ -54,29 +67,29 @@ async function checkBirthdays() {
             return;
         }
 
-        // Run for each user in the "birthdays" list
+        // Return error message if the announcements channel does not exist
+        if (!announcementsChannel) {
+            console.log(`The channel "${ANNOUNCEMENTS_CHANNEL_NAME}" does not exist in guild "${guild.name}"`);
+            return;
+        }
+
+        // Add/remove the role for each user in the birthdays list
         for (const userId in birthdays) {
-            // Check if it's their birthday
-            const isBirthday = birthdays[userId] === todayStr;
-
-            // Retrieve user from ID
-            const member = guild.members.cache.get(userId);
-
-            // Add or remove the birthday role
             try {
                 // Fetch the member using their user ID
                 const member = await guild.members.fetch(userId); 
-
-                if (isBirthday) {
-                    // If it is the user's birthday and they don't have the birthday role, add it
+                
+                if (birthdays[userId] === todayStr) {
+                    // If it is the user's birthday and they don't have the birthday role, add it and announce their birthday
                     if (!member.roles.cache.has(birthdayRole.id)) {
-                        member.roles.add(birthdayRole).then(() => console.log(`Added birthday role to ${member.user.tag}`));
-                        
+                        await member.roles.add(birthdayRole).then(() => console.log(`Added birthday role to ${member.user.tag}`));
+                        announcementsChannel.send(`## Today is ${member.displayName}'s birthday 🎉\n@everyone wish them a happy birthday below!`);
+                        //announcementsChannel.send(`## This is a test for ${member.displayName}\n@.everyone ignore this message`);
                     }
                 } else {
                     // If it is not the user's birthday and they have the birthday role, remove it
                     if (member.roles.cache.has(birthdayRole.id)) {
-                        member.roles.remove(birthdayRole).then(() => console.log(`Removed birthday role from ${member.user.tag}`));
+                        await member.roles.remove(birthdayRole).then(() => console.log(`Removed birthday role from ${member.user.tag}`));
                     }
                 }
             } catch (error) {
