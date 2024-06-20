@@ -15,6 +15,8 @@ const moment = require('moment-timezone');
 
 // All birthdays stored in "userID: MM-DD" format
 const birthdays = {
+    '173613438650679296': 'MM-DD', // koolboom (Andrej)
+    
     '181274954719952898': '01-05', // gnomecomingatchya (Chris)
     '265978521493438476': '02-20', // jigolowo (Zach)
     '653776219791294495': '03-03', // sixtyfour.64 (Nitro)
@@ -24,11 +26,15 @@ const birthdays = {
     '195683188364804096': '05-02', // rex0218 (Rex)
     '300770582826450955': '05-11', // nointernet (Eddy)
     '396253506731900929': '05-19', // furnituristic (Future)
+    '251747160834441219': '06-20', // jiashei (Steve)
     '134144734707974145': '07-05', // zakarii7 (Zack)
     '242099941483347968': '07-22', // mizukimillion (Mizu)
     '250047611938144256': '07-27', // snippins (Gerald)
+    '162219729635901440': '09-06', // __atomic (Mahad)
+    '621806711724048424': '09-12', // coopium69 (Shivam)
     '183341905965219840': '09-24', // javaaaaaaa (Dakotah)
     '300453354214260737': '11-14', // unrivaled_bacon (Roland)
+    '159590600654454784': '12-18', // rkenmcl (Ken)
     '123855427048964098': '12-29'  // pounce1 (Janak)
 };
 
