@@ -77,11 +77,7 @@ module.exports = {
                         .setCustomId('next')
                         .setLabel('>')
                         .setStyle(ButtonStyle.Secondary)
-                        .setDisabled(currentPage >= Math.ceil(userIds.length / 4) - 1),
-                    new ButtonBuilder()
-                        .setCustomId('back')
-                        .setLabel('↩')
-                        .setStyle(ButtonStyle.Secondary)
+                        .setDisabled(currentPage >= Math.ceil(userIds.length / 4) - 1)
                 );
         };
 
@@ -157,8 +153,6 @@ module.exports = {
                 modal.addComponents(firstActionRow, secondActionRow, thirdActionRow);
 
                 await i.showModal(modal);
-            } else if (i.customId === 'back') {
-                await i.reply({ content: 'Back functionality not implemented yet.', ephemeral: true });
             } else if (i.customId.startsWith('remove_')) {
                 const userId = i.customId.split('_')[1];
                 delete birthdays[userId];
@@ -245,6 +239,7 @@ module.exports = {
 
                 // Update the original message
                 await sendOrUpdateMessage(null, true);
+                await modalInteraction.deferUpdate();
             } else if (modalInteraction.customId.startsWith('birthday_modal_')) {
                 const userId = modalInteraction.customId.split('_')[2];
                 const month = modalInteraction.fields.getTextInputValue('month');
@@ -271,6 +266,7 @@ module.exports = {
 
                 // Update the original message
                 await sendOrUpdateMessage(null, true);
+                await modalInteraction.deferUpdate();
             }
         });
     },
