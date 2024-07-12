@@ -1,8 +1,13 @@
 // Load environment variables
 require('dotenv').config();
 
-// Import Discord library and create a new Discord client
-const { Client, GatewayIntentBits } = require('discord.js');
+// Import required libraries
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+const moment = require('moment-timezone');
+
+// Create a new Discord client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -10,53 +15,44 @@ const client = new Client({
   ]
 });
 
-// Import moment-timezone to convert date to Eastern Standard Time
-const moment = require('moment-timezone');
+// Check if birthdays.json exists, if not, create it
+if (!fs.existsSync('birthdays.json')) {
+    fs.writeFileSync('birthdays.json', '{}', 'utf8');
+    console.log('Created empty birthdays.json file');
+}
 
-// All birthdays stored in "userID: MM-DD" format
-const birthdays = {
-    '173613438650679296': 'MM-DD', // koolboom (Andrej)
-    
-    '181274954719952898': '01-05', // gnomecomingatchya (Chris)
-    '265978521493438476': '02-20', // jigolowo (Zach)
-    '653776219791294495': '03-03', // sixtyfour.64 (Nitro)
-    '246759502609776643': '04-23', // marsyon (Marsel)
-    '173611736925077506': '04-27', // ziptip (Alex)
-    '618283700228063252': '04-30', // sup_dup (Marko)
-    '195683188364804096': '05-02', // rex0218 (Rex)
-    '300770582826450955': '05-11', // nointernet (Eddy)
-    '396253506731900929': '05-19', // furnituristic (Future)
-    '251747160834441219': '06-20', // jiashei (Steve)
-    '134144734707974145': '07-05', // zakarii7 (Zack)
-    '242099941483347968': '07-22', // mizukimillion (Mizu)
-    '250047611938144256': '07-27', // snippins (Gerald)
-    '162219729635901440': '09-06', // __atomic (Mahad)
-    '621806711724048424': '09-12', // coopium69 (Shivam)
-    '183341905965219840': '09-24', // javaaaaaaa (Dakotah)
-    '300453354214260737': '11-14', // unrivaled_bacon (Roland)
-    '159590600654454784': '12-18', // rkenmcl (Ken)
-    '123855427048964098': '12-29'  // pounce1 (Janak)
-};
+// Create a collection for commands
+client.commands = new Collection();
+
+// Read commands from the commands directory
+const commandsPath = path.join(__dirname, 'commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    const command = require(filePath);
+    if ('data' in command && 'execute' in command) {
+        client.commands.set(command.data.name, command);
+    } else {
+        console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+    }
+}
 
 // Name of the birthday role to be assigned to users and the channel to make announcements in
 const BIRTHDAY_ROLE_NAME = 'Almighty Birthday Lord';
 const ANNOUNCEMENTS_CHANNEL_NAME = '💬-words-are-fun';
 
-// Run "checkBirthdays" every 12:01 AM once ready
+// Run "checkBirthdays" every minute once ready
 client.once('ready', () => {
     console.log('Ready!');
-
-    setInterval(checkBirthdays, 60 * 1000); // Check birthdays every minute
-
-    // Schedule bot to run daily at 00:01 in the GMT-4 timezone
-    // const job = schedule.scheduleJob({hour: 4, minute: 1}, function() { // GMT-4 at 00:01 is 04:01 UTC
-    //     checkBirthdays();
-    // });
-
+    setInterval(checkBirthdays, 60 * 1000);
 });
 
 // Check for birthdays and assign the birthday roles
 async function checkBirthdays() {
+    // Read birthdays from JSON file
+    const birthdays = JSON.parse(fs.readFileSync('birthdays.json', 'utf8'));
+
     // Get today's date and format into MM-DD format
     const today = moment().tz("America/New_York");
     const todayStr = today.format('MM-DD');
@@ -90,7 +86,6 @@ async function checkBirthdays() {
                     if (!member.roles.cache.has(birthdayRole.id)) {
                         await member.roles.add(birthdayRole).then(() => console.log(`Added birthday role to ${member.user.tag}`));
                         announcementsChannel.send(`## Today is ${member.displayName}'s birthday 🎉\n@everyone wish them a happy birthday below!`);
-                        //announcementsChannel.send(`## This is a test for ${member.displayName}\n@.everyone ignore this message`);
                     }
                 } else {
                     // If it is not the user's birthday and they have the birthday role, remove it
@@ -106,4 +101,21 @@ async function checkBirthdays() {
     });
 }
 
+// Handle slash commands
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const command = client.commands.get(interaction.commandName);
+
+    if (!command) return;
+
+    try {
+        await command.execute(interaction);
+    } catch (error) {
+        console.error(error);
+        await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+    }
+});
+
+// Login to Discord
 client.login(process.env.DISCORD_BOT_TOKEN);
