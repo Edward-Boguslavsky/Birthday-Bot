@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const moment = require('moment');
 
@@ -84,8 +84,16 @@ module.exports = {
         const sendOrUpdateMessage = async (int, edit = false) => {
             const rows = await generateRows(currentPage);
             rows.push(generateControlRow());
+
+            // Calculate total pages, ensuring at least 1 page even when empty
+            const totalPages = Math.max(1, Math.ceil(userIds.length / 4));
+
+            // Adjust currentPage if it's out of bounds
+            currentPage = Math.min(currentPage, totalPages - 1);
+
             const messageOptions = { 
-                content: '## Add, edit, or remove users\' birthdays\n\n' + '-# Page ' + (currentPage + 1) + ' of ' + Math.ceil(userIds.length / 4), 
+                content: '## Add, edit, or remove users\' birthdays\n\n' + 
+                        `-# Page ${currentPage + 1} of ${totalPages}`,
                 components: rows,
                 ephemeral: true
             };
@@ -100,6 +108,7 @@ module.exports = {
 
         await sendOrUpdateMessage(interaction);
 
+        // Create a message collector and set a time limit for collecting interactions
         const collector = interaction.channel.createMessageComponentCollector({
             filter: i => i.user.id === interaction.user.id,
             time: 900000 // 15 minutes
@@ -197,16 +206,37 @@ module.exports = {
         });
 
         collector.on('end', async () => {
-            const newInteraction = await interaction.channel.send({
-                content: 'The previous session expired. Please use the /customize command again.',
-                ephemeral: true
+            const embed = new EmbedBuilder()
+                .setColor(0xF0B132)
+                .setAuthor({ name: 'SESSION EXPIRED', iconURL: 'https://cdn3.emoji.gg/emojis/4260-info.png' })
+                .setDescription('The previous session has expired. Please use the /customize command again')
+
+            // Edit the original reply
+            await originalInteraction.editReply({
+                content: '',
+                embeds: [embed],
+                components: [] // Remove all components
             });
-            setTimeout(() => newInteraction.delete(), 10000);
         });
 
         // Handle modal submissions
         interaction.client.on('interactionCreate', async (modalInteraction) => {
             if (!modalInteraction.isModalSubmit()) return;
+
+            const createErrorEmbed = (description) => {
+                return new EmbedBuilder()
+                    .setColor(0xED4245)
+                    .setAuthor({ name: 'ERROR', iconURL: 'https://cdn3.emoji.gg/emojis/6426-error.png' })
+                    .setDescription(description);
+            };
+
+            const sendErrorAndReturn = async (description) => {
+                await modalInteraction.reply({ 
+                    embeds: [createErrorEmbed(description)], 
+                    ephemeral: true 
+                });
+                return;
+            };
 
             if (modalInteraction.customId === 'add_birthday_modal') {
                 const userId = modalInteraction.fields.getTextInputValue('userId');
@@ -214,13 +244,22 @@ module.exports = {
                 const day = modalInteraction.fields.getTextInputValue('day');
 
                 // Validate input
+                if (birthdays.hasOwnProperty(userId)) {
+                    return sendErrorAndReturn('This user already has a birthday set. Use the edit function to change it');
+                }
+
                 if (!/^\d{18}$/.test(userId)) {
-                    await modalInteraction.reply({ content: 'Invalid User ID. Please enter a valid 18-digit User ID.', ephemeral: true });
+                    await sendErrorAndReturn('Invalid User ID. Please enter a valid 18-digit user ID');
+                    return;
+                }
+
+                if (!(await modalInteraction.guild.members.fetch(userId).catch(() => null))) {
+                    await sendErrorAndReturn('Invalid User ID. There are no users in this server with that user ID');
                     return;
                 }
 
                 if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
-                    await modalInteraction.reply({ content: 'Invalid input. Please enter valid numbers for month (1-12) and day (1-31).', ephemeral: true });
+                    await sendErrorAndReturn('Invalid birthday. Please enter valid numbers for month (1-12) and day (1-31)');
                     return;
                 }
 
@@ -247,7 +286,7 @@ module.exports = {
 
                 // Validate input
                 if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
-                    await modalInteraction.reply({ content: 'Invalid input. Please enter valid numbers for month (1-12) and day (1-31).', ephemeral: true });
+                    await sendErrorAndReturn('Invalid birthday. Please enter valid numbers for month (1-12) and day (1-31)');
                     return;
                 }
 
