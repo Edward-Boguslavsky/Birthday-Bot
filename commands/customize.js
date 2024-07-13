@@ -235,6 +235,11 @@ module.exports = {
                     embeds: [createErrorEmbed(description)], 
                     ephemeral: true 
                 });
+
+                setTimeout(async () => {
+                    await modalInteraction.deleteReply();
+                }, 10000); // 10 seconds
+
                 return;
             };
 
@@ -245,7 +250,8 @@ module.exports = {
 
                 // Validate input
                 if (birthdays.hasOwnProperty(userId)) {
-                    return sendErrorAndReturn('This user already has a birthday set. Use the edit function to change it');
+                    await sendErrorAndReturn('This user already has a birthday set. Use the edit function to change it');
+                    return;
                 }
 
                 if (!/^\d{18}$/.test(userId)) {
