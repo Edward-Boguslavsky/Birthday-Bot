@@ -2,13 +2,41 @@ const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Modal
 const fs = require('fs');
 const moment = require('moment');
 
+// Map to store active sessions
+const activeSessions = new Map();
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('customize')
         .setDescription('Add, edit, or remove users\' birthdays'),
 
     async execute(interaction) {
-        let originalInteraction = interaction;
+        const guildId = interaction.guildId;
+
+        // End all active sessions in this server
+        for (const [userId, session] of activeSessions) {
+            if (session.guildId === guildId) {
+                session.collector.stop();
+                
+                const description = interaction.user.id == userId
+                    ? 'You have started a new session causing this one to expire automatically'
+                    : `Another user has started a new session causing this one to expire automatically. Use the /customize command again to continue`;
+
+                const embed = new EmbedBuilder()
+                    .setColor(0xF0B132)
+                    .setAuthor({ name: 'SESSION EXPIRED', iconURL: 'https://cdn3.emoji.gg/emojis/4260-info.png' })
+                    .setDescription(description);
+
+                await session.message.edit({
+                    content: '',
+                    embeds: [embed],
+                    components: []
+                });
+
+                activeSessions.delete(userId);
+            }
+        }
+
         let birthdays = JSON.parse(fs.readFileSync('birthdays.json', 'utf8'));
         let userIds = Object.keys(birthdays);
         let currentPage = 0;
@@ -85,10 +113,7 @@ module.exports = {
             const rows = await generateRows(currentPage);
             rows.push(generateControlRow());
 
-            // Calculate total pages, ensuring at least 1 page even when empty
             const totalPages = Math.max(1, Math.ceil(userIds.length / 4));
-
-            // Adjust currentPage if it's out of bounds
             currentPage = Math.min(currentPage, totalPages - 1);
 
             const messageOptions = { 
@@ -98,31 +123,43 @@ module.exports = {
                 ephemeral: true
             };
             
-            if (edit) {
-                await originalInteraction.editReply(messageOptions);
+            if (edit && activeSessions.has(int.user.id)) {
+                const session = activeSessions.get(int.user.id);
+                try {
+                    await session.message.edit(messageOptions);
+                } catch (error) {
+                    if (error.code === 10008) { // Unknown Message error
+                        // Message no longer exists, send a new one and update the session
+                        const newMessage = await int.reply(messageOptions);
+                        session.message = newMessage;
+                    } else {
+                        throw error; // Re-throw if it's a different error
+                    }
+                }
             } else {
-                await int.reply(messageOptions);
-                originalInteraction = int;
+                return await int.reply(messageOptions);
             }
         };
 
-        await sendOrUpdateMessage(interaction);
+        const reply = await sendOrUpdateMessage(interaction);
 
-        // Create a message collector and set a time limit for collecting interactions
         const collector = interaction.channel.createMessageComponentCollector({
             filter: i => i.user.id === interaction.user.id,
-            time: 900000 // 15 minutes
+            time: 600000 // 10 minutes
+        });
+
+        // Store the new session
+        activeSessions.set(interaction.user.id, {
+            collector: collector,
+            message: reply,
+            guildId: guildId
         });
 
         collector.on('collect', async i => {
             if (i.customId === 'previous') {
                 currentPage = Math.max(0, currentPage - 1);
-                await sendOrUpdateMessage(null, true);
-                await i.deferUpdate();
             } else if (i.customId === 'next') {
                 currentPage = Math.min(Math.ceil(userIds.length / 4) - 1, currentPage + 1);
-                await sendOrUpdateMessage(null, true);
-                await i.deferUpdate();
             } else if (i.customId === 'add') {
                 const modal = new ModalBuilder()
                     .setCustomId('add_birthday_modal')
@@ -155,13 +192,14 @@ module.exports = {
                     .setMinLength(1)
                     .setMaxLength(2);
 
-                const firstActionRow = new ActionRowBuilder().addComponents(userIdInput);
-                const secondActionRow = new ActionRowBuilder().addComponents(monthInput);
-                const thirdActionRow = new ActionRowBuilder().addComponents(dayInput);
-
-                modal.addComponents(firstActionRow, secondActionRow, thirdActionRow);
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(userIdInput),
+                    new ActionRowBuilder().addComponents(monthInput),
+                    new ActionRowBuilder().addComponents(dayInput)
+                );
 
                 await i.showModal(modal);
+                return;
             } else if (i.customId.startsWith('remove_')) {
                 const userId = i.customId.split('_')[1];
                 delete birthdays[userId];
@@ -170,8 +208,6 @@ module.exports = {
                 if (currentPage > 0 && currentPage * 4 >= userIds.length) {
                     currentPage--;
                 }
-                await sendOrUpdateMessage(null, true);
-                await i.deferUpdate();
             } else if (i.customId.startsWith('username_')) {
                 const userId = i.customId.split('_')[1];
                 const modal = new ModalBuilder()
@@ -196,23 +232,32 @@ module.exports = {
                     .setMinLength(1)
                     .setMaxLength(2);
 
-                const firstActionRow = new ActionRowBuilder().addComponents(monthInput);
-                const secondActionRow = new ActionRowBuilder().addComponents(dayInput);
-
-                modal.addComponents(firstActionRow, secondActionRow);
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(monthInput),
+                    new ActionRowBuilder().addComponents(dayInput)
+                );
 
                 await i.showModal(modal);
+                return;
             }
+
+            // Pass the interaction object directly
+            await sendOrUpdateMessage(i, true);
+            await i.deferUpdate();
         });
 
         collector.on('end', async () => {
+            // Remove the session when the collector ends
+            const session = activeSessions.get(interaction.user.id);
+            activeSessions.delete(interaction.user.id);
+
             const embed = new EmbedBuilder()
                 .setColor(0xF0B132)
                 .setAuthor({ name: 'SESSION EXPIRED', iconURL: 'https://cdn3.emoji.gg/emojis/4260-info.png' })
-                .setDescription('The previous session has expired. Please use the /customize command again')
+                .setDescription('This session has expired automatically after 10 minutes. Use the /customize command again to continue')
 
             // Edit the original reply
-            await originalInteraction.editReply({
+            await session.message.edit({
                 content: '',
                 embeds: [embed],
                 components: [] // Remove all components
@@ -248,6 +293,8 @@ module.exports = {
                 const month = modalInteraction.fields.getTextInputValue('month');
                 const day = modalInteraction.fields.getTextInputValue('day');
 
+                birthdays = JSON.parse(fs.readFileSync('birthdays.json', 'utf8'));
+
                 // Validate input
                 if (birthdays.hasOwnProperty(userId)) {
                     await sendErrorAndReturn('This user already has a birthday set. Use the edit function to change it');
@@ -281,10 +328,6 @@ module.exports = {
                 // Find the new page for the added user
                 const userIndex = userIds.indexOf(userId);
                 currentPage = Math.floor(userIndex / 4);
-
-                // Update the original message
-                await sendOrUpdateMessage(null, true);
-                await modalInteraction.deferUpdate();
             } else if (modalInteraction.customId.startsWith('birthday_modal_')) {
                 const userId = modalInteraction.customId.split('_')[2];
                 const month = modalInteraction.fields.getTextInputValue('month');
@@ -308,9 +351,15 @@ module.exports = {
                 // Find the new page for the edited user
                 const userIndex = userIds.indexOf(userId);
                 currentPage = Math.floor(userIndex / 4);
+            }
 
-                // Update the original message
-                await sendOrUpdateMessage(null, true);
+            // Update the message after processing the modal
+            if (activeSessions.has(modalInteraction.user.id)) {
+                await sendOrUpdateMessage(modalInteraction, true);
+            }
+            
+            // Acknowledge the modal submission without sending a visible reply
+            if (!modalInteraction.deferred && !modalInteraction.replied) {
                 await modalInteraction.deferUpdate();
             }
         });
