@@ -27,11 +27,14 @@ module.exports = {
                     .setAuthor({ name: 'SESSION EXPIRED', iconURL: 'https://cdn3.emoji.gg/emojis/4260-info.png' })
                     .setDescription(description);
 
-                await session.message.edit({
-                    content: '',
-                    embeds: [embed],
-                    components: []
-                });
+                // Check if message still exists before editing
+                try {
+                    await session.message.edit({
+                        content: '',
+                        embeds: [embed],
+                        components: []
+                    });
+                } catch (e) { /* Message likely deleted, ignore */ }
 
                 activeSessions.delete(userId);
             }
@@ -123,22 +126,34 @@ module.exports = {
                 ephemeral: true
             };
             
-            if (edit && activeSessions.has(int.user.id)) {
-                const session = activeSessions.get(int.user.id);
+            if (edit && activeSessions.has(interaction.user.id)) {
+                const session = activeSessions.get(interaction.user.id);
                 try {
                     await session.message.edit(messageOptions);
                 } catch (error) {
-                    if (error.code === 10008) { // Unknown Message error
-                        // Message no longer exists, send a new one and update the session
+                    if (error.code === 10008) { 
                         const newMessage = await int.reply(messageOptions);
                         session.message = newMessage;
                     } else {
-                        throw error; // Re-throw if it's a different error
+                        throw error; 
                     }
                 }
             } else {
                 return await int.reply(messageOptions);
             }
+        };
+
+        // Helper for error handling inside the collector
+        const sendErrorAndReturn = async (targetInteraction, description) => {
+            const embed = new EmbedBuilder()
+                .setColor(0xED4245)
+                .setAuthor({ name: 'ERROR', iconURL: 'https://cdn3.emoji.gg/emojis/6426-error.png' })
+                .setDescription(description);
+
+            await targetInteraction.reply({ embeds: [embed], ephemeral: true });
+            // Don't delete immediately so they can read it, but ephemeral handles cleanup naturally usually.
+            // If you specifically want it deleted after 10s:
+            setTimeout(() => targetInteraction.deleteReply().catch(() => {}), 10000);
         };
 
         const reply = await sendOrUpdateMessage(interaction);
@@ -148,7 +163,6 @@ module.exports = {
             time: 600000 // 10 minutes
         });
 
-        // Store the new session
         activeSessions.set(interaction.user.id, {
             collector: collector,
             message: reply,
@@ -158,48 +172,14 @@ module.exports = {
         collector.on('collect', async i => {
             if (i.customId === 'previous') {
                 currentPage = Math.max(0, currentPage - 1);
+                await sendOrUpdateMessage(i, true);
+                await i.deferUpdate();
+
             } else if (i.customId === 'next') {
                 currentPage = Math.min(Math.ceil(userIds.length / 4) - 1, currentPage + 1);
-            } else if (i.customId === 'add') {
-                const modal = new ModalBuilder()
-                    .setCustomId('add_birthday_modal')
-                    .setTitle('Add Birthday');
+                await sendOrUpdateMessage(i, true);
+                await i.deferUpdate();
 
-                const userIdInput = new TextInputBuilder()
-                    .setCustomId('userId')
-                    .setLabel("User ID")
-                    .setPlaceholder('XXXXXXXXXXXXXXXXXX')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true)
-                    .setMinLength(18)
-                    .setMaxLength(18);
-
-                const monthInput = new TextInputBuilder()
-                    .setCustomId('month')
-                    .setLabel("Month (1-12)")
-                    .setPlaceholder('MM')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true)
-                    .setMinLength(1)
-                    .setMaxLength(2);
-
-                const dayInput = new TextInputBuilder()
-                    .setCustomId('day')
-                    .setLabel("Day (1-31)")
-                    .setPlaceholder('DD')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true)
-                    .setMinLength(1)
-                    .setMaxLength(2);
-
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(userIdInput),
-                    new ActionRowBuilder().addComponents(monthInput),
-                    new ActionRowBuilder().addComponents(dayInput)
-                );
-
-                await i.showModal(modal);
-                return;
             } else if (i.customId.startsWith('remove_')) {
                 const userId = i.customId.split('_')[1];
                 delete birthdays[userId];
@@ -208,6 +188,78 @@ module.exports = {
                 if (currentPage > 0 && currentPage * 4 >= userIds.length) {
                     currentPage--;
                 }
+                await sendOrUpdateMessage(i, true);
+                await i.deferUpdate();
+
+            } else if (i.customId === 'add') {
+                const modal = new ModalBuilder()
+                    .setCustomId('add_birthday_modal')
+                    .setTitle('Add Birthday');
+
+                const userIdInput = new TextInputBuilder()
+                    .setCustomId('userId').setLabel("User ID").setPlaceholder('XXXXXXXXXXXXXXXXXX')
+                    .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(18).setMaxLength(18);
+
+                const monthInput = new TextInputBuilder()
+                    .setCustomId('month').setLabel("Month (1-12)").setPlaceholder('MM')
+                    .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(2);
+
+                const dayInput = new TextInputBuilder()
+                    .setCustomId('day').setLabel("Day (1-31)").setPlaceholder('DD')
+                    .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(2);
+
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(userIdInput),
+                    new ActionRowBuilder().addComponents(monthInput),
+                    new ActionRowBuilder().addComponents(dayInput)
+                );
+
+                await i.showModal(modal);
+
+                // Wait for the specific modal submission
+                const modalSubmit = await i.awaitModalSubmit({
+                    filter: (m) => m.customId === 'add_birthday_modal' && m.user.id === i.user.id,
+                    time: 60000
+                }).catch(() => null);
+
+                if (!modalSubmit) return; // Timed out or cancelled
+
+                const userId = modalSubmit.fields.getTextInputValue('userId');
+                const month = modalSubmit.fields.getTextInputValue('month');
+                const day = modalSubmit.fields.getTextInputValue('day');
+
+                // Validation
+                birthdays = JSON.parse(fs.readFileSync('birthdays.json', 'utf8')); // Refresh file
+
+                if (birthdays.hasOwnProperty(userId)) {
+                    await sendErrorAndReturn(modalSubmit, 'This user already has a birthday set. Use the edit function to change it');
+                    return;
+                }
+                if (!/^\d{18}$/.test(userId)) {
+                    await sendErrorAndReturn(modalSubmit, 'Invalid User ID. Please enter a valid 18-digit user ID');
+                    return;
+                }
+                if (!(await interaction.guild.members.fetch(userId).catch(() => null))) {
+                    await sendErrorAndReturn(modalSubmit, 'Invalid User ID. There are no users in this server with that user ID');
+                    return;
+                }
+                if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+                    await sendErrorAndReturn(modalSubmit, 'Invalid birthday. Please enter valid numbers for month (1-12) and day (1-31)');
+                    return;
+                }
+
+                birthdays[userId] = `${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                sortBirthdays();
+                fs.writeFileSync('birthdays.json', JSON.stringify(birthdays, null, 2));
+
+                // Move to the page where the user was added
+                const userIndex = userIds.indexOf(userId);
+                currentPage = Math.floor(userIndex / 4);
+                
+                // Update UI via the Modal Interaction
+                await sendOrUpdateMessage(modalSubmit, true);
+                await modalSubmit.deferUpdate();
+
             } else if (i.customId.startsWith('username_')) {
                 const userId = i.customId.split('_')[1];
                 const modal = new ModalBuilder()
@@ -215,22 +267,12 @@ module.exports = {
                     .setTitle('Edit Birthday');
 
                 const monthInput = new TextInputBuilder()
-                    .setCustomId('month')
-                    .setLabel("Month (1-12)")
-                    .setPlaceholder('MM')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true)
-                    .setMinLength(1)
-                    .setMaxLength(2);
+                    .setCustomId('month').setLabel("Month (1-12)").setPlaceholder('MM')
+                    .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(2);
 
                 const dayInput = new TextInputBuilder()
-                    .setCustomId('day')
-                    .setLabel("Day (1-31)")
-                    .setPlaceholder('DD')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true)
-                    .setMinLength(1)
-                    .setMaxLength(2);
+                    .setCustomId('day').setLabel("Day (1-31)").setPlaceholder('DD')
+                    .setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(2);
 
                 modal.addComponents(
                     new ActionRowBuilder().addComponents(monthInput),
@@ -238,129 +280,54 @@ module.exports = {
                 );
 
                 await i.showModal(modal);
-                return;
-            }
 
-            // Pass the interaction object directly
-            await sendOrUpdateMessage(i, true);
-            await i.deferUpdate();
+                // Wait for submission
+                const modalSubmit = await i.awaitModalSubmit({
+                    filter: (m) => m.customId === `birthday_modal_${userId}` && m.user.id === i.user.id,
+                    time: 60000
+                }).catch(() => null);
+
+                if (!modalSubmit) return;
+
+                const month = modalSubmit.fields.getTextInputValue('month');
+                const day = modalSubmit.fields.getTextInputValue('day');
+
+                if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+                    await sendErrorAndReturn(modalSubmit, 'Invalid birthday. Please enter valid numbers for month (1-12) and day (1-31)');
+                    return;
+                }
+
+                birthdays = JSON.parse(fs.readFileSync('birthdays.json', 'utf8'));
+                birthdays[userId] = `${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                sortBirthdays();
+                fs.writeFileSync('birthdays.json', JSON.stringify(birthdays, null, 2));
+
+                // Ensure we stay on correct page
+                const userIndex = userIds.indexOf(userId);
+                currentPage = Math.floor(userIndex / 4);
+
+                await sendOrUpdateMessage(modalSubmit, true);
+                await modalSubmit.deferUpdate();
+            }
         });
 
         collector.on('end', async () => {
-            // Remove the session when the collector ends
-            const session = activeSessions.get(interaction.user.id);
-            activeSessions.delete(interaction.user.id);
+            if (activeSessions.has(interaction.user.id)) {
+                const session = activeSessions.get(interaction.user.id);
+                activeSessions.delete(interaction.user.id);
+                
+                const embed = new EmbedBuilder()
+                    .setColor(0xF0B132)
+                    .setAuthor({ name: 'SESSION EXPIRED', iconURL: 'https://cdn3.emoji.gg/emojis/4260-info.png' })
+                    .setDescription('This session has expired automatically after 10 minutes. Use the /customize command again to continue');
 
-            const embed = new EmbedBuilder()
-                .setColor(0xF0B132)
-                .setAuthor({ name: 'SESSION EXPIRED', iconURL: 'https://cdn3.emoji.gg/emojis/4260-info.png' })
-                .setDescription('This session has expired automatically after 10 minutes. Use the /customize command again to continue')
-
-            // Edit the original reply
-            await session.message.edit({
-                content: '',
-                embeds: [embed],
-                components: [] // Remove all components
-            });
-        });
-
-        // Handle modal submissions
-        interaction.client.on('interactionCreate', async (modalInteraction) => {
-            if (!modalInteraction.isModalSubmit()) return;
-
-            const createErrorEmbed = (description) => {
-                return new EmbedBuilder()
-                    .setColor(0xED4245)
-                    .setAuthor({ name: 'ERROR', iconURL: 'https://cdn3.emoji.gg/emojis/6426-error.png' })
-                    .setDescription(description);
-            };
-
-            const sendErrorAndReturn = async (description) => {
-                await modalInteraction.reply({ 
-                    embeds: [createErrorEmbed(description)], 
-                    ephemeral: true 
-                });
-
-                setTimeout(async () => {
-                    await modalInteraction.deleteReply();
-                }, 10000); // 10 seconds
-
-                return;
-            };
-
-            if (modalInteraction.customId === 'add_birthday_modal') {
-                const userId = modalInteraction.fields.getTextInputValue('userId');
-                const month = modalInteraction.fields.getTextInputValue('month');
-                const day = modalInteraction.fields.getTextInputValue('day');
-
-                birthdays = JSON.parse(fs.readFileSync('birthdays.json', 'utf8'));
-
-                // Validate input
-                if (birthdays.hasOwnProperty(userId)) {
-                    await sendErrorAndReturn('This user already has a birthday set. Use the edit function to change it');
-                    return;
-                }
-
-                if (!/^\d{18}$/.test(userId)) {
-                    await sendErrorAndReturn('Invalid User ID. Please enter a valid 18-digit user ID');
-                    return;
-                }
-
-                if (!(await modalInteraction.guild.members.fetch(userId).catch(() => null))) {
-                    await sendErrorAndReturn('Invalid User ID. There are no users in this server with that user ID');
-                    return;
-                }
-
-                if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
-                    await sendErrorAndReturn('Invalid birthday. Please enter valid numbers for month (1-12) and day (1-31)');
-                    return;
-                }
-
-                const newBirthday = `${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                birthdays[userId] = newBirthday;
-
-                // Sort birthdays and update userIds
-                sortBirthdays();
-
-                // Update birthdays.json
-                fs.writeFileSync('birthdays.json', JSON.stringify(birthdays, null, 2));
-
-                // Find the new page for the added user
-                const userIndex = userIds.indexOf(userId);
-                currentPage = Math.floor(userIndex / 4);
-            } else if (modalInteraction.customId.startsWith('birthday_modal_')) {
-                const userId = modalInteraction.customId.split('_')[2];
-                const month = modalInteraction.fields.getTextInputValue('month');
-                const day = modalInteraction.fields.getTextInputValue('day');
-
-                // Validate input
-                if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
-                    await sendErrorAndReturn('Invalid birthday. Please enter valid numbers for month (1-12) and day (1-31)');
-                    return;
-                }
-
-                const newBirthday = `${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                birthdays[userId] = newBirthday;
-
-                // Sort birthdays and update userIds
-                sortBirthdays();
-
-                // Update birthdays.json
-                fs.writeFileSync('birthdays.json', JSON.stringify(birthdays, null, 2));
-
-                // Find the new page for the edited user
-                const userIndex = userIds.indexOf(userId);
-                currentPage = Math.floor(userIndex / 4);
-            }
-
-            // Update the message after processing the modal
-            if (activeSessions.has(modalInteraction.user.id)) {
-                await sendOrUpdateMessage(modalInteraction, true);
-            }
-            
-            // Acknowledge the modal submission without sending a visible reply
-            if (!modalInteraction.deferred && !modalInteraction.replied) {
-                await modalInteraction.deferUpdate();
+                try {
+                    await session.message.edit({
+                        content: '',
+                        embeds: [embed],
+                        components: [] 
+                    });
+                } catch (e) { }
             }
         });
     },
