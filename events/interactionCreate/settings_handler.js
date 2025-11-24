@@ -202,27 +202,27 @@ module.exports = async (interaction) => {
 
     // --- 6. HANDLE CONFIG SELECT MENUS ---
     if (interaction.isChannelSelectMenu() && interaction.customId === 'setting_select_channel') {
-        const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+        const config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
         config.channelId = interaction.values[0];
-        fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
+        fs.writeFileSync('settings.json', JSON.stringify(config, null, 2));
 
         const components = await buildSettingsInterface(interaction.guild, null);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
 
     if (interaction.isRoleSelectMenu() && interaction.customId === 'setting_select_role') {
-        const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+        const config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
         config.roleId = interaction.values[0];
-        fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
+        fs.writeFileSync('settings.json', JSON.stringify(config, null, 2));
 
         const components = await buildSettingsInterface(interaction.guild, null);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
 
     if (interaction.isStringSelectMenu() && interaction.customId === 'setting_select_timezone') {
-        const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+        const config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
         config.timezone = interaction.values[0];
-        fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
+        fs.writeFileSync('settings.json', JSON.stringify(config, null, 2));
 
         const components = await buildSettingsInterface(interaction.guild, null);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });

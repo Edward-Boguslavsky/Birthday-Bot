@@ -1,48 +1,48 @@
+// Import required libraries
 const { SlashCommandBuilder, MessageFlags, ContainerBuilder } = require('discord.js');
-const buildSettingsInterface = require('../interfaces/settings_interface');
+const build_settings_interface = require('../interfaces/settings_interface');
 
 module.exports = {
+    // Add slash command
     data: new SlashCommandBuilder()
         .setName('settings')
         .setDescription('Manage birthday settings'),
 
+    // Run slash command instructions
     run: async ({ interaction }) => {
-        // 1. Defer Reply (Ephemeral)
         await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
-        // --- SESSION MANAGEMENT ---
         const client = interaction.client;
         
-        // Create the warning container
-        const warningContainer = new ContainerBuilder()
-            .setAccentColor(0xFEE75C) // Discord Yellow
+        // Create warning message container
+        const warning_container = new ContainerBuilder()
+            .setAccentColor(0xFEE75C)
             .addTextDisplayComponents((text) => 
                 text.setContent("### Another user opened the settings menu! You can only have one session at a time")
             );
 
         // Loop through previous sessions and close them
-        if (client.settingsSessions && client.settingsSessions.length > 0) {
-            for (const oldInteraction of client.settingsSessions) {
+        if (client.settings_sessions && client.settings_sessions.length > 0) {
+            for (const oldInteraction of client.settings_sessions) {
                 try {
-                    // Replace the old interface with the warning
+                    // Replace old interfaces with warning message
                     await oldInteraction.editReply({
-                        components: [warningContainer],
+                        components: [warning_container],
                         flags: [MessageFlags.IsComponentsV2]
                     });
                 } catch (e) {
-                    // Interaction might have expired or been dismissed; ignore.
+                    // Ignore instructions if old interfaces not found
                 }
             }
         }
 
         // Reset the sessions list and add the current one
-        client.settingsSessions = [interaction];
-        // --------------------------
+        client.settings_sessions = [interaction];
 
-        // 2. Build UI using the Interface
-        const components = await buildSettingsInterface(interaction.guild);
+        // Set the interface to only chosen components
+        const components = await build_settings_interface(interaction.guild);
 
-        // 3. Send Response
+        // Send interface to be displayed as ephemeral message
         await interaction.editReply({
             components: components,
             flags: [MessageFlags.IsComponentsV2]

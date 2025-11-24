@@ -49,7 +49,7 @@ module.exports = async (guild, selectedUserId = null, notification = null) => {
     // --- 1. Read Config & Birthdays ---
     let config = {};
     try {
-        config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+        config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
     } catch (e) { config = { channelId: null, roleId: null, timezone: 'America/New_York' }; }
 
     let birthdays = [];
@@ -69,7 +69,7 @@ module.exports = async (guild, selectedUserId = null, notification = null) => {
     );
 
     const configContainer = new ContainerBuilder()
-        .addTextDisplayComponents((text) => text.setContent('# Configurations\nSelect the announcement channel, birthday role, and server timezone below'))
+        .addTextDisplayComponents((text) => text.setContent('# Settings\nSelect the announcement channel, birthday role, and server timezone below'))
         .addSeparatorComponents((s) => s.setSpacing(SeparatorSpacingSize.Large))
         .addActionRowComponents((row) => {
             const menu = new ChannelSelectMenuBuilder()

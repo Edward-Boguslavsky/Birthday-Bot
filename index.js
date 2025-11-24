@@ -2,7 +2,7 @@
 require('dotenv').config();
 
 // Import required libraries
-const { Client, GatewayIntentBits, ContainerBuilder, TextDisplayBuilder, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, ContainerBuilder, MessageFlags } = require('discord.js');
 const fs = require('fs');
 const moment = require('moment-timezone');
 const path = require('path');
@@ -16,9 +16,6 @@ const client = new Client({
   ]
 });
 
-// Initialize active sessions list for the settings command
-client.settingsSessions = [];
-
 // Initialize CommandKit
 new CommandKit({
     client,
@@ -27,17 +24,17 @@ new CommandKit({
     bulkRegister: true,
 });
 
-// Default Configuration
-const DEFAULT_CONFIG = {
+// Default settings for birthday roles and messages
+const DEFAULT_SETTINGS = {
     channelId: null,
     roleId: null,
     timezone: "America/New_York"
 };
 
-// Check if config.json exists, if not, create it
-if (!fs.existsSync('config.json')) {
-    fs.writeFileSync('config.json', JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf8');
-    console.log('📄 Created config.json file');
+// Check if settings.json exists, if not, create it
+if (!fs.existsSync('settings.json')) {
+    fs.writeFileSync('settings.json', JSON.stringify(DEFAULT_SETTINGS, null, 2), 'utf8');
+    console.log('📄 Created settings.json file');
 }
 
 // Check if birthdays.json exists, if not, create it
@@ -46,45 +43,39 @@ if (!fs.existsSync('birthdays.json')) {
     console.log('📄 Created empty birthdays.json file');
 }
 
-// Run "checkBirthdays" every minute once ready
+// Keep track of active settings sessions
+client.settings_sessions = [];
+
+// Run "check_birthdays" every minute once ready
 client.once('clientReady', () => {
     console.log(`✅ Logged in as ${client.user.tag}!`);
 
-    setInterval(checkBirthdays, 60 * 1000);
+    setInterval(check_birthdays, 60 * 1000);
 });
 
 // Check for birthdays and assign the birthday roles
-async function checkBirthdays() {
-    // Read Data
+async function check_birthdays() {
+    // Store JSON save data
     let birthdays = [];
     let config = {};
     
     try {
         birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
-        config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+        config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
     } catch (e) {
         return console.error("❌ Failed to read JSON files");
     }
 
-    // --- SAFETY CHECKS ---
-    // 1. If config is incomplete, stop.
-    if (!config.channelId || !config.roleId) {
-        // Config is not set up yet, silent return to avoid console spam
-        return;
-    }
-
-    // 2. If no birthdays, stop.
-    if (!birthdays || birthdays.length === 0) {
-        return;
-    }
-    // ---------------------
+    // Exit function if saved settings or birthdays are incomplete
+    if (!config.channelId || !config.roleId) return;
+    if (!birthdays || birthdays.length === 0) return;
 
     // Get today's date
     const now = moment().tz(config.timezone || "America/New_York");
     const current_month = now.month() + 1; 
     const current_day = now.date();
 
-    // Confirm that the channel and role exist (Using ID from config)
+    // Confirm that the channel and role exist in the server
     const channel = await client.channels.fetch(config.channelId).catch(() => null);
     if (!channel) return console.error("🔍 Configured Channel not found");
     
@@ -92,10 +83,11 @@ async function checkBirthdays() {
     const role = await server.roles.cache.get(config.roleId);
     if (!role) return console.error("🔍 Configured Role not found");
 
-    // Add/remove the role for each user in the birthdays list
-    for (const friend of birthdays) {
+    // Wish users happy birthday!
+    for (const record of birthdays) {
         try {
-            const member = await server.members.fetch(friend.userId);
+            // Get server member from user ID
+            const member = await server.members.fetch(record.userId);
             if (!member) return console.error("🔍 Member not found");
 
             // Get names of server, channel, and member
@@ -103,41 +95,42 @@ async function checkBirthdays() {
             const role_name = role.name;
             const member_name = member.displayName;
 
-            if (friend.month === current_month && friend.day === current_day) {
-                // If it is the user's birthday and they don't have the birthday role, add it and announce their birthday
+            // If it is the user's birthday send message and add role, otherwise remove role
+            if (record.month === current_month && record.day === current_day) {
                 if (!member.roles.cache.has(config.roleId)) {
+                    // Add birthday role
                     await member.roles.add(config.roleId)
                         .then(() => console.log(`➕ Added birthday role "${role_name}" to ${member_name}`));
                     
-                    // Create the container with a Section (allows Text + Thumbnail)
-                    const birthdayContainer = new ContainerBuilder()
+                    // Create container for birthday message
+                    const birthday_container = new ContainerBuilder()
                         .addSectionComponents((section) => 
                             section
                                 .addTextDisplayComponents((text) => 
-                                    text.setContent(`# Today is ${member_name}'s birthday\n@everyone wish them a happy birthday below!`)
+                                    text.setContent(`# Today is ${member_name}'s birthday\n@.everyone wish them a happy birthday below!`)
                                 )
                                 .setThumbnailAccessory((thumbnail) => 
                                     thumbnail.setURL('attachment://party_popper.gif') 
                                 )
                         );
 
-                    // Send the container with the V2 Flag
+                    // Send container
                     await channel.send({ 
-                        components: [birthdayContainer],
+                        components: [birthday_container],
                         files: ['./party_popper.gif'],
                         flags: [MessageFlags.IsComponentsV2]
                     })
                         .then(() => console.log(`📨 Sent birthday wishes to ${member_name} in "${channel_name}"`));
                 }
             } else {
-                // If it is not the user's birthday and they have the birthday role, remove it
                 if (member.roles.cache.has(config.roleId)) {
+                    // Remove birthday role
                     await member.roles.remove(config.roleId)
                         .then(() => console.log(`➖ Removed birthday role "${role_name}" from ${member_name}`));
                 }
             }
         } catch (error) {
-            console.error(`❌ Failed to process birthday for ${friend.userId}: ${error}`);
+            console.error(`❌ Failed to process birthday for ${record.userId}: ${error}`);
         }
     }
 }
