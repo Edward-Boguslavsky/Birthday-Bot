@@ -8,6 +8,28 @@ const {
 const fs = require('fs');
 const buildSettingsInterface = require('../../interfaces/settings_interface');
 
+/**
+ * Helper to update the UI with a notification, then clear it after 5 seconds.
+ */
+async function updateUIWithNotification(interaction, selectedUserId, notification) {
+    // 1. Show Notification
+    const components = await buildSettingsInterface(interaction.guild, selectedUserId, notification);
+    await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
+
+    // 2. Wait 5 seconds, then clear it
+    setTimeout(async () => {
+        try {
+            // Rebuild without notification (null)
+            const clearComponents = await buildSettingsInterface(interaction.guild, selectedUserId, null);
+            
+            // Use editReply because the interaction was already updated/replied to
+            await interaction.editReply({ components: clearComponents, flags: [MessageFlags.IsComponentsV2] });
+        } catch (e) {
+            // Interaction might have expired or message deleted; ignore.
+        }
+    }, 6667);
+}
+
 module.exports = async (interaction) => {
     
     // --- 1. HANDLE ADD BUTTON ---
@@ -80,6 +102,7 @@ module.exports = async (interaction) => {
 
             await interaction.showModal(modal);
         } else {
+            // Fallback error (should rarely happen unless file changed)
             await interaction.reply({ content: '❌ User not found.', flags: [MessageFlags.Ephemeral] });
         }
     }
@@ -94,8 +117,11 @@ module.exports = async (interaction) => {
         birthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
         fs.writeFileSync('birthdays.json', JSON.stringify(birthdays, null, 2));
 
-        const components = await buildSettingsInterface(interaction.guild, null);
-        await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
+        // Success Notification: "Birthday successfully deleted"
+        await updateUIWithNotification(interaction, null, { 
+            message: "Birthday successfully deleted", 
+            type: "success" 
+        });
     }
 
     // --- 4. HANDLE MODAL SUBMIT ---
@@ -115,10 +141,39 @@ module.exports = async (interaction) => {
         const month = parseInt(interaction.fields.getTextInputValue('birthday_input_month'));
         const day = parseInt(interaction.fields.getTextInputValue('birthday_input_day'));
 
+        // -- VALIDATION START --
+        
+        // 1. Date Check
         if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
-            return interaction.reply({ content: '❌ Invalid Date entered.', flags: [MessageFlags.Ephemeral] });
+            return updateUIWithNotification(interaction, isAddMode ? null : userId, {
+                message: "Invalid birthday month or day! Birthday was not added",
+                type: "error"
+            });
         }
 
+        // 2. Add Mode Specific Checks
+        if (isAddMode) {
+            // Check ID format (Must be numeric and decent length)
+            if (!/^\d{17,20}$/.test(userId)) {
+                return updateUIWithNotification(interaction, null, {
+                    message: "Invalid user ID! Birthday was not added",
+                    type: "error"
+                });
+            }
+
+            // Check if user exists in server
+            try {
+                await interaction.guild.members.fetch(userId);
+            } catch (err) {
+                return updateUIWithNotification(interaction, null, {
+                    message: "No matching user in this server! Birthday was not added",
+                    type: "error"
+                });
+            }
+        }
+        // -- VALIDATION END --
+
+        // Save Data
         const birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
         
         const filteredBirthdays = birthdays.filter(b => b.userId !== userId);
@@ -127,34 +182,25 @@ module.exports = async (interaction) => {
         filteredBirthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
         fs.writeFileSync('birthdays.json', JSON.stringify(filteredBirthdays, null, 2));
 
-        const components = await buildSettingsInterface(interaction.guild, userId);
+        // Success Notification
+        const successMessage = isAddMode ? "Birthday successfully added" : "Birthday successfully edited";
+        
+        await updateUIWithNotification(interaction, userId, {
+            message: successMessage,
+            type: "success"
+        });
+    }
+
+    // --- 5. HANDLE BIRTHDAY SELECT MENU ---
+    if (interaction.isStringSelectMenu() && interaction.customId === 'birthday_select') {
+        const selectedId = interaction.values[0];
+        if (selectedId === 'none') return interaction.deferUpdate();
+
+        const components = await buildSettingsInterface(interaction.guild, selectedId);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
 
-    // --- 5. HANDLE SELECT MENUS (BIRTHDAY LIST & TIMEZONE) ---
-    if (interaction.isStringSelectMenu()) {
-        
-        // Birthday List Select
-        if (interaction.customId === 'birthday_select') {
-            const selectedId = interaction.values[0];
-            if (selectedId === 'none') return interaction.deferUpdate();
-
-            const components = await buildSettingsInterface(interaction.guild, selectedId);
-            await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
-        } 
-        
-        // Timezone Select
-        else if (interaction.customId === 'setting_select_timezone') {
-            const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
-            config.timezone = interaction.values[0];
-            fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
-
-            const components = await buildSettingsInterface(interaction.guild, null);
-            await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
-        }
-    }
-
-    // --- 6. HANDLE CONFIG SELECT MENUS (CHANNEL & ROLE) ---
+    // --- 6. HANDLE CONFIG SELECT MENUS ---
     if (interaction.isChannelSelectMenu() && interaction.customId === 'setting_select_channel') {
         const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
         config.channelId = interaction.values[0];
@@ -167,6 +213,15 @@ module.exports = async (interaction) => {
     if (interaction.isRoleSelectMenu() && interaction.customId === 'setting_select_role') {
         const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
         config.roleId = interaction.values[0];
+        fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
+
+        const components = await buildSettingsInterface(interaction.guild, null);
+        await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'setting_select_timezone') {
+        const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+        config.timezone = interaction.values[0];
         fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
 
         const components = await buildSettingsInterface(interaction.guild, null);

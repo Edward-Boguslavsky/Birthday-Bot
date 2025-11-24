@@ -16,6 +16,9 @@ const client = new Client({
   ]
 });
 
+// Initialize active sessions list for the settings command
+client.settingsSessions = [];
+
 // Initialize CommandKit
 new CommandKit({
     client,
@@ -24,10 +27,10 @@ new CommandKit({
     bulkRegister: true,
 });
 
-// Default Configuration (formerly constants)
+// Default Configuration
 const DEFAULT_CONFIG = {
-    channelId: '504105830438666240',
-    roleId: '639163629479919654',
+    channelId: null,
+    roleId: null,
     timezone: "America/New_York"
 };
 
@@ -53,11 +56,31 @@ client.once('clientReady', () => {
 // Check for birthdays and assign the birthday roles
 async function checkBirthdays() {
     // Read Data
-    const birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
-    const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+    let birthdays = [];
+    let config = {};
+    
+    try {
+        birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
+        config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+    } catch (e) {
+        return console.error("❌ Failed to read JSON files");
+    }
+
+    // --- SAFETY CHECKS ---
+    // 1. If config is incomplete, stop.
+    if (!config.channelId || !config.roleId) {
+        // Config is not set up yet, silent return to avoid console spam
+        return;
+    }
+
+    // 2. If no birthdays, stop.
+    if (!birthdays || birthdays.length === 0) {
+        return;
+    }
+    // ---------------------
 
     // Get today's date
-    const now = moment().tz(config.timezone);
+    const now = moment().tz(config.timezone || "America/New_York");
     const current_month = now.month() + 1; 
     const current_day = now.date();
 

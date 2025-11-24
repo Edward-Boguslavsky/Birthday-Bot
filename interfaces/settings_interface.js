@@ -43,8 +43,9 @@ const TIMEZONES = [
  * Builds the settings UI containers.
  * @param {import('discord.js').Guild} guild - The Discord Guild object.
  * @param {string|null} selectedUserId - The ID of the currently selected user (if any).
+ * @param {object|null} notification - Optional notification object { message: string, type: 'success'|'error' }
  */
-module.exports = async (guild, selectedUserId = null) => {
+module.exports = async (guild, selectedUserId = null, notification = null) => {
     // --- 1. Read Config & Birthdays ---
     let config = {};
     try {
@@ -59,20 +60,17 @@ module.exports = async (guild, selectedUserId = null) => {
     birthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
 
     // --- 2. Build Configuration Container ---
-    
-    // Timezone Select Menu
     const timezoneOptions = TIMEZONES.map(tz => 
         new StringSelectMenuOptionBuilder()
-            .setLabel(tz.label.replace(/_/g, ' ')) // Visual: Remove underscores (America/New York)
+            .setLabel(tz.label.replace(/_/g, ' '))
             .setDescription(tz.description)
-            .setValue(tz.label) // Internal: Keep underscores (America/New_York)
+            .setValue(tz.label)
             .setDefault(tz.label === config.timezone)
     );
 
     const configContainer = new ContainerBuilder()
-        .addTextDisplayComponents((text) => text.setContent('# Configuration\nSelect the announcement channel, birthday role, and server timezone below'))
+        .addTextDisplayComponents((text) => text.setContent('# Configurations\nSelect the announcement channel, birthday role, and server timezone below'))
         .addSeparatorComponents((s) => s.setSpacing(SeparatorSpacingSize.Large))
-        // Channel Select
         .addActionRowComponents((row) => {
             const menu = new ChannelSelectMenuBuilder()
                 .setCustomId('setting_select_channel')
@@ -83,7 +81,6 @@ module.exports = async (guild, selectedUserId = null) => {
             if (config.channelId) menu.setDefaultChannels(config.channelId);
             return row.setComponents(menu);
         })
-        // Role Select
         .addActionRowComponents((row) => {
             const menu = new RoleSelectMenuBuilder()
                 .setCustomId('setting_select_role')
@@ -93,7 +90,6 @@ module.exports = async (guild, selectedUserId = null) => {
             if (config.roleId) menu.setDefaultRoles(config.roleId);
             return row.setComponents(menu);
         })
-        // Timezone Select
         .addActionRowComponents((row) => {
             const menu = new StringSelectMenuBuilder()
                 .setCustomId('setting_select_timezone')
@@ -166,14 +162,26 @@ module.exports = async (guild, selectedUserId = null) => {
         .addActionRowComponents((row) => row.setComponents(selectMenu));
 
     if (selectedText) {
-        listContainer
-            .addTextDisplayComponents((text) => text.setContent(selectedText))
+        listContainer.addTextDisplayComponents((text) => text.setContent(selectedText));
     }
 
     listContainer
         .addSeparatorComponents((s) => s.setSpacing(SeparatorSpacingSize.Large))
         .addActionRowComponents((row) => row.setComponents(addButton, editButton, deleteButton));
 
-    // Return BOTH containers
-    return [configContainer, listContainer];
+    const finalContainers = [configContainer, listContainer];
+
+    // --- 4. Build Notification Container (If needed) ---
+    if (notification) {
+        const accentColor = notification.type === 'success' ? 0x00863A : 0xD22D39; // Green : Red
+        
+        const notifContainer = new ContainerBuilder()
+            .setAccentColor(accentColor)
+            .addTextDisplayComponents((text) => text.setContent(`### ${notification.message}`));
+
+        // Add to the top of the array
+        finalContainers.unshift(notifContainer);
+    }
+
+    return finalContainers;
 };
