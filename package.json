@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "commandkit": "^0.1.6",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
     "moment-timezone": "^0.5.45"

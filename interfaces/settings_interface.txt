@@ -1,0 +1,113 @@
+const { 
+    ContainerBuilder, 
+    StringSelectMenuBuilder, 
+    StringSelectMenuOptionBuilder, 
+    ButtonBuilder, 
+    ButtonStyle,
+    SeparatorSpacingSize 
+} = require('discord.js');
+const fs = require('fs');
+const moment = require('moment-timezone');
+
+/**
+ * Builds the settings UI container with Select Menu and Buttons.
+ * @param {import('discord.js').Guild} guild - The Discord Guild object to fetch members from.
+ * @param {string|null} selectedUserId - The ID of the currently selected user (if any).
+ */
+module.exports = async (guild, selectedUserId = null) => {
+    // 1. Read and Sort birthdays
+    let birthdays = [];
+    try {
+        birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
+    } catch (error) {
+        birthdays = []; 
+    }
+    
+    // Sort by Month, then Day
+    birthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
+
+    // 2. Prepare Select Menu Options
+    const options = [];
+    let selectedText = null; // Changed to null so we can check if it exists
+
+    for (const record of birthdays) {
+        let label = `Unknown User (${record.userId})`;
+        let username = "Unknown";
+        
+        try {
+            // Define member outside to ensure we get the data we need
+            const member = await guild.members.fetch(record.userId);
+            label = member.displayName;
+            username = member.user.username;
+        } catch (e) { /* User likely left the server */ }
+
+        const dateStr = moment().month(record.month - 1).date(record.day).format('MMMM D');
+
+        options.push(
+            new StringSelectMenuOptionBuilder()
+                .setLabel(label)
+                .setDescription(dateStr)
+                .setValue(record.userId)
+        );
+
+        // Update display text if this user is selected
+        if (selectedUserId && record.userId === selectedUserId) {
+            // Fixed: Now accessing 'username' which is properly scoped
+            selectedText = `## ${label}\n${dateStr}\n${username}\n-# ${record.userId}`;
+        }
+    }
+
+    if (options.length === 0) {
+        options.push(
+            new StringSelectMenuOptionBuilder()
+                .setLabel('No birthdays found')
+                .setValue('none')
+        );
+    }
+
+    // 3. Build Components
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('birthday_select')
+        .setPlaceholder('Select a user')
+        .addOptions(options);
+
+    const addButton = new ButtonBuilder()
+        .setCustomId('birthday_btn_add')
+        .setLabel('Add')
+        .setStyle(ButtonStyle.Success);
+
+    const editButton = new ButtonBuilder()
+        .setLabel('Edit')
+        .setStyle(ButtonStyle.Secondary);
+
+    const deleteButton = new ButtonBuilder()
+        .setLabel('Delete')
+        .setStyle(ButtonStyle.Danger);
+
+    if (selectedUserId) {
+        editButton.setCustomId(`birthday_btn_edit_${selectedUserId}`).setDisabled(false);
+        deleteButton.setCustomId(`birthday_btn_delete_${selectedUserId}`).setDisabled(false);
+    } else {
+        editButton.setCustomId('birthday_btn_edit').setDisabled(true);
+        deleteButton.setCustomId('birthday_btn_delete').setDisabled(true);
+    }
+
+    // 4. Build Container Step-by-Step
+    // We do this to strictly avoid adding an empty text component
+    const container = new ContainerBuilder()
+        .addTextDisplayComponents((text) => text.setContent("# Settings\nAdd a new user or select an existing user below to manage"))
+        .addSeparatorComponents((s) => s.setSpacing(SeparatorSpacingSize.Large))
+        .addActionRowComponents((row) => row.setComponents(selectMenu));
+
+    // Only add this text component if we actually have text to show
+    if (selectedText) {
+        container
+            .addTextDisplayComponents((text) => text.setContent(selectedText));
+    }
+
+    container
+        .addSeparatorComponents((s) => s.setSpacing(SeparatorSpacingSize.Large))
+        .addActionRowComponents((row) => row.setComponents(addButton, editButton, deleteButton));
+
+    return [container];
+};
