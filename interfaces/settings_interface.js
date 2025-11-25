@@ -192,7 +192,7 @@ module.exports = async (guild, selected_user_id = null, notification = null) => 
 
     // Build notification container (if notification exists)
     if (notification) {
-        const accentColor = notification.type === 'success' ? 0x00863A : 0xD22D39; // Green : Red
+        const accentColor = notification.type === 'success' ? 0x00863A : 0xD22D39;
         
         const notif_container = new ContainerBuilder()
             .setAccentColor(accentColor)

@@ -3,14 +3,23 @@ const { ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle, ActionRowB
 const fs = require('fs');
 const build_settings_interface = require('../../interfaces/settings_interface');
 
+// Notification timeout timer
+let active_notification_timeout = null;
+
 // Add notification message to settings interface and show for 6.767 seconds
 async function update_notification_UI(interaction, selectedUser_id, notification) {
+    // Clear all existing notification timeout timers
+    if (active_notification_timeout) {
+        clearTimeout(active_notification_timeout);
+        active_notification_timeout = null;
+    }
+
     // Get settings interface with notification and send it
     const components_with_notification = await build_settings_interface(interaction.guild, selectedUser_id, notification);
-    await interaction.update({ components: components_with_notification, flags: [MessageFlags.IsComponentsV2] }); // Fixed: property name should be 'components'
+    await interaction.update({ components: components_with_notification, flags: [MessageFlags.IsComponentsV2] });
 
-    // Hide notification by editing settings interface without notification
-    setTimeout(async () => {
+    // Set new notification timeout timer
+    active_notification_timeout = setTimeout(async () => {
         try {
             // Rebuild settings interface without notification
             const components_without_notification = await build_settings_interface(interaction.guild, selectedUser_id, null);
@@ -20,6 +29,8 @@ async function update_notification_UI(interaction, selectedUser_id, notification
         } catch (e) {
             // Ignore instructions if old interfaces not found
         }
+        // Reset notification timeout timer
+        active_notification_timeout = null;
     }, 6767);
 }
 
@@ -107,7 +118,7 @@ module.exports = async (interaction) => {
         }
     }
 
-    // Delete birthday when "Edit" button is pressed (Assuming you meant Delete button)
+    // Delete birthday when "Edit" button is pressed
     if (interaction.isButton() && interaction.customId.startsWith('birthday_btn_delete_')) {
         // Find matching user
         const user_id = interaction.customId.split('_').pop();
@@ -200,36 +211,24 @@ module.exports = async (interaction) => {
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
 
-    // Update birthday channel when channel is selected in channel select menu
+    let setting_key = null;
+
+    // Determine which select menu was interacted with
     if (interaction.isChannelSelectMenu() && interaction.customId === 'setting_select_channel') {
-        // Get saved settings from settings.json and set the new channel
-        const saved_settings = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
-        saved_settings.channelId = interaction.values[0];
-        fs.writeFileSync('settings.json', JSON.stringify(saved_settings, null, 2));
-
-        // Refresh settings interface
-        const components = await build_settings_interface(interaction.guild, null);
-        await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
+        setting_key = 'channelId';
+    } else if (interaction.isRoleSelectMenu() && interaction.customId === 'setting_select_role') {
+        setting_key = 'roleId';
+    } else if (interaction.isStringSelectMenu() && interaction.customId === 'setting_select_timezone') {
+        setting_key = 'timezone';
     }
 
-    if (interaction.isRoleSelectMenu() && interaction.customId === 'setting_select_role') {
-        // Get saved settings from settings.json and set the new role
+    if (setting_key) {
+        // Read settings, update settings, and save settings
         const saved_settings = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
-        saved_settings.roleId = interaction.values[0];
+        saved_settings[setting_key] = interaction.values[0];
         fs.writeFileSync('settings.json', JSON.stringify(saved_settings, null, 2));
 
-        // Refresh settings interface
-        const components = await build_settings_interface(interaction.guild, null);
-        await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
-    }
-
-    if (interaction.isStringSelectMenu() && interaction.customId === 'setting_select_timezone') {
-        // Get saved settings from settings.json and set the new timezone
-        const saved_settings = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
-        saved_settings.timezone = interaction.values[0];
-        fs.writeFileSync('settings.json', JSON.stringify(saved_settings, null, 2));
-
-        // Refresh settings interface
+        // Update settings interface
         const components = await build_settings_interface(interaction.guild, null);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
