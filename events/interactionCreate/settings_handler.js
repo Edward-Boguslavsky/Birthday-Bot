@@ -82,7 +82,7 @@ module.exports = async (interaction) => {
     if (interaction.isButton() && interaction.customId.startsWith('birthday_btn_edit_')) {
         // Find matching user and extract month and day
         const user_id = interaction.customId.split('_').pop();
-        const birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
+        const birthdays = JSON.parse(fs.readFileSync('./data/birthdays.json', 'utf8'));
         const user_record = birthdays.find(b => b.userId === user_id);
 
         if (user_record) {
@@ -122,14 +122,14 @@ module.exports = async (interaction) => {
     if (interaction.isButton() && interaction.customId.startsWith('birthday_btn_delete_')) {
         // Find matching user
         const user_id = interaction.customId.split('_').pop();
-        let birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
+        let birthdays = JSON.parse(fs.readFileSync('./data/birthdays.json', 'utf8'));
         
         // Remove user
         birthdays = birthdays.filter(b => b.userId !== user_id);
         
         // Re-sort and save birthdays
         birthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
-        fs.writeFileSync('birthdays.json', JSON.stringify(birthdays, null, 2));
+        fs.writeFileSync('./data/birthdays.json', JSON.stringify(birthdays, null, 2));
 
         // Update notification with success message
         await update_notification_UI(interaction, null, { 
@@ -185,13 +185,13 @@ module.exports = async (interaction) => {
         }
 
         // Read birthdays, update birthdays, and save birthdays
-        const birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
+        const birthdays = JSON.parse(fs.readFileSync('./data/birthdays.json', 'utf8'));
 
         const filtered_birthdays = birthdays.filter(b => b.userId !== user_id);
         filtered_birthdays.push({ userId: user_id, month, day });
 
         filtered_birthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
-        fs.writeFileSync('birthdays.json', JSON.stringify(filtered_birthdays, null, 2));
+        fs.writeFileSync('./data/birthdays.json', JSON.stringify(filtered_birthdays, null, 2));
 
         // Update notification with success message
         await update_notification_UI(interaction, user_id, {
@@ -224,9 +224,9 @@ module.exports = async (interaction) => {
 
     if (setting_key) {
         // Read settings, update settings, and save settings
-        const saved_settings = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
+        const saved_settings = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
         saved_settings[setting_key] = interaction.values[0];
-        fs.writeFileSync('settings.json', JSON.stringify(saved_settings, null, 2));
+        fs.writeFileSync('./data/settings.json', JSON.stringify(saved_settings, null, 2));
 
         // Update settings interface
         const components = await build_settings_interface(interaction.guild, null);

@@ -32,14 +32,14 @@ const DEFAULT_SETTINGS = {
 };
 
 // Check if settings.json exists, if not, create it
-if (!fs.existsSync('settings.json')) {
-    fs.writeFileSync('settings.json', JSON.stringify(DEFAULT_SETTINGS, null, 2), 'utf8');
+if (!fs.existsSync('./data/settings.json')) {
+    fs.writeFileSync('./data/settings.json', JSON.stringify(DEFAULT_SETTINGS, null, 2), 'utf8');
     console.log('📄 Created settings.json file');
 }
 
 // Check if birthdays.json exists, if not, create it
-if (!fs.existsSync('birthdays.json')) {
-    fs.writeFileSync('birthdays.json', '[]', 'utf8');
+if (!fs.existsSync('./data/birthdays.json')) {
+    fs.writeFileSync('./data/birthdays.json', '[]', 'utf8');
     console.log('📄 Created empty birthdays.json file');
 }
 
@@ -60,8 +60,8 @@ async function check_birthdays() {
     let config = {};
     
     try {
-        birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
-        config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
+        birthdays = JSON.parse(fs.readFileSync('./data/birthdays.json', 'utf8'));
+        config = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
     } catch (e) {
         return console.error("❌ Failed to read JSON files");
     }
@@ -107,7 +107,7 @@ async function check_birthdays() {
                         .addSectionComponents((section) => 
                             section
                                 .addTextDisplayComponents((text) => 
-                                    text.setContent(`# Today is ${member_name}'s birthday\n@.everyone wish them a happy birthday below!`)
+                                    text.setContent(`# Today is ${member_name}'s birthday\n@everyone wish them a happy birthday below!`)
                                 )
                                 .setThumbnailAccessory((thumbnail) => 
                                     thumbnail.setURL('attachment://party_popper.gif') 
@@ -117,7 +117,7 @@ async function check_birthdays() {
                     // Send container
                     await channel.send({ 
                         components: [birthday_container],
-                        files: ['./party_popper.gif'],
+                        files: ['./data/party_popper.gif'],
                         flags: [MessageFlags.IsComponentsV2]
                     })
                         .then(() => console.log(`📨 Sent birthday wishes to ${member_name} in "${channel_name}"`));

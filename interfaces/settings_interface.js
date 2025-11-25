@@ -41,7 +41,7 @@ module.exports = async (guild, selected_user_id = null, notification = null) => 
     // Get saved settings or set defaults if none exist
     let saved_settings = {};
     try {
-        saved_settings = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
+        saved_settings = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
     } catch (e) { 
         saved_settings = { channelId: null, roleId: null, timezone: 'America/New_York' }; 
     }
@@ -49,7 +49,7 @@ module.exports = async (guild, selected_user_id = null, notification = null) => 
     // Get saved birthdays or set as empty if none exist
     let birthdays = [];
     try {
-        birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
+        birthdays = JSON.parse(fs.readFileSync('./data/birthdays.json', 'utf8'));
         birthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
     } catch (error) { 
         birthdays = []; 
