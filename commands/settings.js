@@ -23,10 +23,10 @@ module.exports = {
 
         // Loop through previous sessions and close them
         if (client.settings_sessions && client.settings_sessions.length > 0) {
-            for (const oldInteraction of client.settings_sessions) {
+            for (const old_interaction of client.settings_sessions) {
                 try {
                     // Replace old interfaces with warning message
-                    await oldInteraction.editReply({
+                    await old_interaction.editReply({
                         components: [warning_container],
                         flags: [MessageFlags.IsComponentsV2]
                     });

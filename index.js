@@ -77,11 +77,11 @@ async function check_birthdays() {
 
     // Confirm that the channel and role exist in the server
     const channel = await client.channels.fetch(config.channelId).catch(() => null);
-    if (!channel) return console.error("🔍 Configured Channel not found");
+    if (!channel) return console.error("🔍 Selected channel not found");
     
     const server = channel.guild;
     const role = await server.roles.cache.get(config.roleId);
-    if (!role) return console.error("🔍 Configured Role not found");
+    if (!role) return console.error("🔍 Selected role not found");
 
     // Wish users happy birthday!
     for (const record of birthdays) {

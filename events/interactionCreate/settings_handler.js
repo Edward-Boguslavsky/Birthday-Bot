@@ -1,139 +1,143 @@
-const { 
-    ModalBuilder, 
-    TextInputBuilder, 
-    TextInputStyle, 
-    ActionRowBuilder, 
-    MessageFlags 
-} = require('discord.js');
+// Import required libraries
+const { ModalBuilder, LabelBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const fs = require('fs');
-const buildSettingsInterface = require('../../interfaces/settings_interface');
+const build_settings_interface = require('../../interfaces/settings_interface');
 
-/**
- * Helper to update the UI with a notification, then clear it after 5 seconds.
- */
-async function updateUIWithNotification(interaction, selectedUserId, notification) {
-    // 1. Show Notification
-    const components = await buildSettingsInterface(interaction.guild, selectedUserId, notification);
-    await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
+// Add notification message to settings interface and show for 6.767 seconds
+async function update_notification_UI(interaction, selectedUser_id, notification) {
+    // Get settings interface with notification and send it
+    const components_with_notification = await build_settings_interface(interaction.guild, selectedUser_id, notification);
+    await interaction.update({ components: components_with_notification, flags: [MessageFlags.IsComponentsV2] }); // Fixed: property name should be 'components'
 
-    // 2. Wait 5 seconds, then clear it
+    // Hide notification by editing settings interface without notification
     setTimeout(async () => {
         try {
-            // Rebuild without notification (null)
-            const clearComponents = await buildSettingsInterface(interaction.guild, selectedUserId, null);
+            // Rebuild settings interface without notification
+            const components_without_notification = await build_settings_interface(interaction.guild, selectedUser_id, null);
             
-            // Use editReply because the interaction was already updated/replied to
-            await interaction.editReply({ components: clearComponents, flags: [MessageFlags.IsComponentsV2] });
+            // Edit settings interface
+            await interaction.editReply({ components: components_without_notification, flags: [MessageFlags.IsComponentsV2] });
         } catch (e) {
-            // Interaction might have expired or message deleted; ignore.
+            // Ignore instructions if old interfaces not found
         }
-    }, 6667);
+    }, 6767);
 }
 
+// Handle interaction events
 module.exports = async (interaction) => {
     
-    // --- 1. HANDLE ADD BUTTON ---
+    // Create "Add Birthday" modal when "Add" button is pressed
     if (interaction.isButton() && interaction.customId === 'birthday_btn_add') {
         const modal = new ModalBuilder()
             .setCustomId('birthday_modal_add')
             .setTitle('Add Birthday');
 
-        const idInput = new TextInputBuilder()
+        const id_input = new TextInputBuilder()
             .setCustomId('birthday_input_id')
-            .setLabel("User ID")
             .setPlaceholder("XXXXXXXXXXXXXXXXXX")
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
-        const monthInput = new TextInputBuilder()
+        const month_input = new TextInputBuilder()
             .setCustomId('birthday_input_month')
-            .setLabel("Month (1-12)")
             .setPlaceholder("MM")
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
-        const dayInput = new TextInputBuilder()
+        const day_input = new TextInputBuilder()
             .setCustomId('birthday_input_day')
-            .setLabel("Day (1-31)")
             .setPlaceholder("DD")
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(idInput),
-            new ActionRowBuilder().addComponents(monthInput),
-            new ActionRowBuilder().addComponents(dayInput)
-        );
+        const id_label = new LabelBuilder()
+            .setLabel("User ID")
+            .setTextInputComponent(id_input);
+
+        const month_label = new LabelBuilder()
+            .setLabel("Month (1-12)")
+            .setTextInputComponent(month_input);
+
+        const day_label = new LabelBuilder()
+            .setLabel("Day (1-31)")
+            .setTextInputComponent(day_input);
+
+        modal.addLabelComponents(id_label, month_label, day_label);
 
         await interaction.showModal(modal);
     }
 
-    // --- 2. HANDLE EDIT BUTTON ---
+    // Create "Edit Birthday" modal when "Edit" button is pressed
     if (interaction.isButton() && interaction.customId.startsWith('birthday_btn_edit_')) {
-        const userId = interaction.customId.split('_').pop();
+        // Find matching user and extract month and day
+        const user_id = interaction.customId.split('_').pop();
         const birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
-        const userRecord = birthdays.find(b => b.userId === userId);
+        const user_record = birthdays.find(b => b.userId === user_id);
 
-        if (userRecord) {
+        if (user_record) {
             const modal = new ModalBuilder()
-                .setCustomId(`birthday_modal_edit_${userId}`)
+                .setCustomId(`birthday_modal_edit_${user_id}`)
                 .setTitle('Edit Birthday');
 
-            const monthInput = new TextInputBuilder()
+            const month_input = new TextInputBuilder()
                 .setCustomId('birthday_input_month')
-                .setLabel("Month (1-12)")
                 .setPlaceholder("MM")
-                .setValue(String(userRecord.month))
+                .setValue(String(user_record.month))
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
-            const dayInput = new TextInputBuilder()
+            const day_input = new TextInputBuilder()
                 .setCustomId('birthday_input_day')
-                .setLabel("Day (1-31)")
                 .setPlaceholder("DD")
-                .setValue(String(userRecord.day))
+                .setValue(String(user_record.day))
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
-            modal.addComponents(
-                new ActionRowBuilder().addComponents(monthInput),
-                new ActionRowBuilder().addComponents(dayInput)
-            );
+            const month_label = new LabelBuilder()
+                .setLabel("Month (1-12)")
+                .setTextInputComponent(month_input);
+
+            const day_label = new LabelBuilder()
+                .setLabel("Day (1-31)")
+                .setTextInputComponent(day_input);
+
+            modal.addLabelComponents(month_label, day_label);
 
             await interaction.showModal(modal);
-        } else {
-            // Fallback error (should rarely happen unless file changed)
-            await interaction.reply({ content: '❌ User not found.', flags: [MessageFlags.Ephemeral] });
         }
     }
 
-    // --- 3. HANDLE DELETE BUTTON ---
+    // Delete birthday when "Edit" button is pressed (Assuming you meant Delete button)
     if (interaction.isButton() && interaction.customId.startsWith('birthday_btn_delete_')) {
-        const userId = interaction.customId.split('_').pop();
+        // Find matching user
+        const user_id = interaction.customId.split('_').pop();
         let birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
         
-        birthdays = birthdays.filter(b => b.userId !== userId);
+        // Remove user
+        birthdays = birthdays.filter(b => b.userId !== user_id);
         
+        // Re-sort and save birthdays
         birthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
         fs.writeFileSync('birthdays.json', JSON.stringify(birthdays, null, 2));
 
-        // Success Notification: "Birthday successfully deleted"
-        await updateUIWithNotification(interaction, null, { 
+        // Update notification with success message
+        await update_notification_UI(interaction, null, { 
             message: "Birthday successfully deleted", 
             type: "success" 
         });
     }
 
-    // --- 4. HANDLE MODAL SUBMIT ---
+    // Submit "Add Birthday" and "Edit Birthday" modals
     if (interaction.isModalSubmit()) {
-        let userId;
-        let isAddMode = false;
+        let user_id;
+        let is_add = false;
 
+        // Get user ID from modal
         if (interaction.customId === 'birthday_modal_add') {
-            isAddMode = true;
-            userId = interaction.fields.getTextInputValue('birthday_input_id');
+            is_add = true;
+            user_id = interaction.fields.getTextInputValue('birthday_input_id');
         } else if (interaction.customId.startsWith('birthday_modal_edit_')) {
-            userId = interaction.customId.split('birthday_modal_edit_')[1];
+            user_id = interaction.customId.split('birthday_modal_edit_')[1];
         } else {
             return;
         }
@@ -141,90 +145,92 @@ module.exports = async (interaction) => {
         const month = parseInt(interaction.fields.getTextInputValue('birthday_input_month'));
         const day = parseInt(interaction.fields.getTextInputValue('birthday_input_day'));
 
-        // -- VALIDATION START --
-        
-        // 1. Date Check
+        // Update notification with error message if both month or day inputted incorrectly
         if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
-            return updateUIWithNotification(interaction, isAddMode ? null : userId, {
+            return update_notification_UI(interaction, is_add ? null : user_id, {
                 message: "Invalid birthday month or day! Birthday was not added",
                 type: "error"
             });
         }
 
-        // 2. Add Mode Specific Checks
-        if (isAddMode) {
-            // Check ID format (Must be numeric and decent length)
-            if (!/^\d{17,20}$/.test(userId)) {
-                return updateUIWithNotification(interaction, null, {
+        if (is_add) {
+            // Update notification with error message if user ID inputted incorrectly
+            if (!/^\d{17,20}$/.test(user_id)) {
+                return update_notification_UI(interaction, null, {
                     message: "Invalid user ID! Birthday was not added",
                     type: "error"
                 });
             }
 
-            // Check if user exists in server
+            // Update notification with error message if user ID not found in server
             try {
-                await interaction.guild.members.fetch(userId);
+                await interaction.guild.members.fetch(user_id);
             } catch (err) {
-                return updateUIWithNotification(interaction, null, {
+                return update_notification_UI(interaction, null, {
                     message: "No matching user in this server! Birthday was not added",
                     type: "error"
                 });
             }
         }
-        // -- VALIDATION END --
 
-        // Save Data
+        // Read birthdays, update birthdays, and save birthdays
         const birthdays = JSON.parse(fs.readFileSync('./birthdays.json', 'utf8'));
-        
-        const filteredBirthdays = birthdays.filter(b => b.userId !== userId);
-        filteredBirthdays.push({ userId, month, day });
 
-        filteredBirthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
-        fs.writeFileSync('birthdays.json', JSON.stringify(filteredBirthdays, null, 2));
+        const filtered_birthdays = birthdays.filter(b => b.userId !== user_id);
+        filtered_birthdays.push({ userId: user_id, month, day });
 
-        // Success Notification
-        const successMessage = isAddMode ? "Birthday successfully added" : "Birthday successfully edited";
-        
-        await updateUIWithNotification(interaction, userId, {
-            message: successMessage,
+        filtered_birthdays.sort((a, b) => (a.month - b.month) || (a.day - b.day));
+        fs.writeFileSync('birthdays.json', JSON.stringify(filtered_birthdays, null, 2));
+
+        // Update notification with success message
+        await update_notification_UI(interaction, user_id, {
+            message: is_add ? "Birthday successfully added" : "Birthday successfully edited",
             type: "success"
         });
     }
 
-    // --- 5. HANDLE BIRTHDAY SELECT MENU ---
+    // Update interface when user is selected in select menu
     if (interaction.isStringSelectMenu() && interaction.customId === 'birthday_select') {
-        const selectedId = interaction.values[0];
-        if (selectedId === 'none') return interaction.deferUpdate();
+        // Get user ID from selected user
+        const selected_id = interaction.values[0];
+        if (selected_id === 'none') return interaction.deferUpdate();
 
-        const components = await buildSettingsInterface(interaction.guild, selectedId);
+        // Update interface with user ID
+        const components = await build_settings_interface(interaction.guild, selected_id);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
 
-    // --- 6. HANDLE CONFIG SELECT MENUS ---
+    // Update birthday channel when channel is selected in channel select menu
     if (interaction.isChannelSelectMenu() && interaction.customId === 'setting_select_channel') {
-        const config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
-        config.channelId = interaction.values[0];
-        fs.writeFileSync('settings.json', JSON.stringify(config, null, 2));
+        // Get saved settings from settings.json and set the new channel
+        const saved_settings = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
+        saved_settings.channelId = interaction.values[0];
+        fs.writeFileSync('settings.json', JSON.stringify(saved_settings, null, 2));
 
-        const components = await buildSettingsInterface(interaction.guild, null);
+        // Refresh settings interface
+        const components = await build_settings_interface(interaction.guild, null);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
 
     if (interaction.isRoleSelectMenu() && interaction.customId === 'setting_select_role') {
-        const config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
-        config.roleId = interaction.values[0];
-        fs.writeFileSync('settings.json', JSON.stringify(config, null, 2));
+        // Get saved settings from settings.json and set the new role
+        const saved_settings = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
+        saved_settings.roleId = interaction.values[0];
+        fs.writeFileSync('settings.json', JSON.stringify(saved_settings, null, 2));
 
-        const components = await buildSettingsInterface(interaction.guild, null);
+        // Refresh settings interface
+        const components = await build_settings_interface(interaction.guild, null);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
 
     if (interaction.isStringSelectMenu() && interaction.customId === 'setting_select_timezone') {
-        const config = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
-        config.timezone = interaction.values[0];
-        fs.writeFileSync('settings.json', JSON.stringify(config, null, 2));
+        // Get saved settings from settings.json and set the new timezone
+        const saved_settings = JSON.parse(fs.readFileSync('./settings.json', 'utf8'));
+        saved_settings.timezone = interaction.values[0];
+        fs.writeFileSync('settings.json', JSON.stringify(saved_settings, null, 2));
 
-        const components = await buildSettingsInterface(interaction.guild, null);
+        // Refresh settings interface
+        const components = await build_settings_interface(interaction.guild, null);
         await interaction.update({ components, flags: [MessageFlags.IsComponentsV2] });
     }
 };
