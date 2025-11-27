@@ -1,2 +1,34 @@
 # Birthday-Bot
- Gives Discord users a birthday role automatically
+A Discord bot built with [discord.js](https://discord.js.org/) and [CommandKit](https://commandkit.dev/) to wish your channel members happy birthday for you and give them a special, limited time gift! The bot features a clean GUI built into Discord's chat that can be accessed by server admins to easily configure settings and birthdays without having to memorize clunky commands!
+
+## How it works
+### Announcement Channel
+Select a channel to send the birthday wish into
+### Birthday Role
+Select a role for the member to enjoy during their birthday
+### Announcement Timezone
+Select the timezone the server uses such that the birthday wish is sent out at midnight
+### Manage Birthdays
+Add, edit, or delete birthdays from a saved list by entering their user ID, month, and day
+
+## How to host it for yourself
+1. Find hosting service (ex. GCP)
+⋅⋅⋅⋅1. Create a new "compute engine" instance
+⋅⋅⋅⋅2. Open the SSH terminal
+2. Install Node.js
+⋅⋅⋅⋅1. Run `sudo apt-get update` to update the package lists
+⋅⋅⋅⋅2. If successful, run `sudo apt-get install -y nodejs npm` to install Node.js and npm
+3. Clone repository
+⋅⋅⋅⋅1. In a folder of your choice, run `git clone https://github.com/Edward-Boguslavsky/Birthday-Bot.git`
+⋅⋅⋅⋅2. After completion, enter the repo folder with `cd Birthday-Bot`
+⋅⋅⋅⋅3. In the repo folder, run `npm install` to install the bot's dependencies
+4. Add your Discord bot API token
+⋅⋅⋅⋅1. Enter `nano .env` to create an "environment variable" file
+⋅⋅⋅⋅2. Type in `DISCORD_BOT_TOKEN=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` where the `X`s represent your 72-character API token
+⋅⋅⋅⋅3. Save and exit with the commands `CTRL + O` followed by `CTRL + X`
+5. Run the bot 24/7
+⋅⋅⋅⋅1. Run `sudo npm install pm2 -g` to install PM2
+⋅⋅⋅⋅2. After installation, run `pm2 start index.js --name Birthday-Bot` to start the process
+⋅⋅⋅⋅3. To restart the process automatically in case of an outage, run `pm2 startup` to get your own custom command
+⋅⋅⋅⋅4. Copy, paste, and run your custom command. It should look something like this `sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u XXXXXXXXXXXXXXXX --hp /home/XXXXXXXXXXXXXXXX` where the `X`s represent your GCP username
+⋅⋅⋅⋅5. Finally, run `pm2 save` to save your process
