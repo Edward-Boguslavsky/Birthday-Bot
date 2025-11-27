@@ -10,33 +10,33 @@ A Discord bot built with [discord.js](https://discord.js.org/) and [CommandKit](
 
 <sup>Birthday bot settings GUI</sup>
 
-### Open GUI
+### 1️⃣ Open GUI
 Open up the bot's GUI by entering the `/settings` command in any text channel
 
 <img width="815" height="107" alt="Image" src="https://github.com/user-attachments/assets/76f96b58-92f2-4a45-a27b-c42c4bdbbaa6" />
 
-### 1️⃣ Set Announcement Channel
+### 2️⃣ Set Announcement Channel
 Select a channel to send the birthday wish into
 
 <img width="425" height="268" alt="Image" src="https://github.com/user-attachments/assets/a100f11c-bffe-4cdc-9095-a8c02060b47d" />
 
-### 2️⃣ Set Birthday Role
+### 3️⃣ Set Birthday Role
 Select a role for the member to enjoy during their birthday
 
 <img width="425" height="266" alt="Image" src="https://github.com/user-attachments/assets/60c3430c-17ce-4fd9-9f29-cff1d8f5e99f" />
 
-### 3️⃣ Set Announcement Timezone
+### 4️⃣ Set Announcement Timezone
 Select the timezone the server uses such that your birthday wishes are sent out at midnight
 
 <img width="425" height="323" alt="Image" src="https://github.com/user-attachments/assets/e2c006b5-48d0-4ee2-b74d-243e8f189ba9" />
 
-### 4️⃣ Add Birthdays
+### 5️⃣ Add Birthdays
 Add, edit, or delete birthdays from a saved list by entering their user ID, month, and day
 
 <img width="425" height="326" alt="Image" src="https://github.com/user-attachments/assets/c4c1e44e-8a9b-4bd4-8453-a76b90ed3edb" />
 <img width="708" height="715" alt="Image" src="https://github.com/user-attachments/assets/23ccf405-f7c0-4624-b319-de3a39ecc8b6" />
 
-### 5️⃣ Sit back and enjoy the peace of mind!
+### 6️⃣ Sit back and enjoy the peace of mind!
 
 ## How to host it for yourself
 #### 1. Find hosting service (ex. GCP)
